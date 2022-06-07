@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="cd2c12a2-573e-4d9c-b8e7-391b06456b25" >
+		<http:listener-connection host="localhost" port="8085" />
+	</http:listener-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="c58f9878-0995-4219-b891-7b26d5892425" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="107351366" database="work" />
+	</db:config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="7eda3e0e-c8ee-4f15-a456-0807851af022" >
+		<http:request-connection host="api.covid19api.com" port="443" protocol="HTTPS"/>
+	</http:request-config>
+	<db:config name="Database_Config1" doc:name="Database Config" doc:id="e14a5d17-51c1-44b4-a7b7-d38e0b400340" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="No217353" database="ordsys" />
+	</db:config>
+	<flow name="foreachFlow" doc:id="2bcb7688-a12a-4798-b5ae-9cd7bdbaeae8" >
+		<http:listener doc:name="Listener" doc:id="9aa3c43b-7332-46e6-bb54-e836f94ed9bf" config-ref="HTTP_Listener_config" path="/for-each"/>
+		<foreach doc:name="For Each" doc:id="fe5e5a2f-4f78-4419-bf1f-3d57e12dc208" batchSize="3">
+			<logger level="INFO" doc:name="Logger" doc:id="82ceb5c6-25e4-4eb6-8601-a1b1d5668e1d" message="counter =#[vars.counter] record : #[output application/json ---  payload]"/>
+		</foreach>
+		<set-payload value="#[payload]" doc:name="payload" doc:id="536c5897-d27c-43b5-8c3c-4ae1f9dcd563" />
+	</flow>
+	<flow name="foreachFlow1" doc:id="bbb2d0bc-df2b-4fb8-81f0-0a1e8beaf121" >
+		<http:listener doc:name="Listener" doc:id="b6e923ec-44b6-47c4-9ca3-af88f1ca0c1c" config-ref="HTTP_Listener_config" path="/covid19"/>
+		<http:request method="GET" doc:name="Request" doc:id="ed8c2ad3-fd3a-4996-9cbb-e71030bd671d" config-ref="HTTP_Request_configuration" path="#['/total/dayone/country/' ++ attributes.queryParams.cname]" />
+		<ee:transform doc:name="Transform Message" doc:id="186e91b8-64d0-4b22-9784-e435c6dd805b">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload map(data,idx) ->
+{
+	"country" : data.Country,
+	"confirmed": data.Confirmed,
+	"deaths" :data.Deaths,
+	"recovered" :data.Recovered,
+	"date" :data.Date
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<foreach doc:name="For Each" doc:id="2ec4a639-e80d-493c-98a7-389cb27a9c86">
+			<logger level="INFO" doc:name="record:#[vars.counter] #[payload]" doc:id="a5e117e9-e9ba-495c-8107-0da3355f7358" message="record:#[vars.counter] #[payload]" />
+			<db:insert doc:name="Insert" doc:id="c6b83cbc-e76d-48b5-b9fa-3ffe196faff8" config-ref="Database_Config1">
+				<db:sql><![CDATA[insert into covid19(country,confirmed,deaths,recovered,date)values(:cn,:con,:dt,:rec,:dat)]]></db:sql>
+				<db:input-parameters><![CDATA[#[{'cn':payload.country,'con':payload.confirmed,
+'dt':payload.deaths,'rec':payload.recovered,'dat':payload.date}]]]></db:input-parameters>
+			</db:insert>
+		</foreach>
+		<set-payload value="#['covid19 data has inserted into database']" doc:name="covid19 data has inserted into database" doc:id="0b588f2b-f779-46e3-bd2b-e8b3d2111a71" />
+	</flow>
+</mule>
